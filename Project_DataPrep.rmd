@@ -1,0 +1,60 @@
+---
+title: "MGT 4050 Project - Data Cleanup"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = '/Users/Antonio/Desktop/MGT4050/2018_RDirectory/PROJECT')
+
+# Make neccessary packages avilable to R
+library(readr)
+library(stargazer)
+library(knitr)
+library(dplyr)
+library(GGally)
+library("psych")
+library(ggplot2)
+```
+
+#Data Import
+```{r}
+# Import Data
+football_results <- read_csv("./football_results.csv") %>%
+  mutate(year = as.numeric(substring(date, 1, 4))) %>%
+  mutate(winnerCountry = ifelse(home_score > away_score, home_team, ifelse(home_score == away_score, "DRAW", away_team))) %>% #Mutate "winnerCountry"
+  mutate(winnerGoalDifferential = ifelse(winnerCountry != "DRAW", abs(home_score-away_score), 0)) %>% #mutate winner country's goal differential
+  mutate(loserCountry = ifelse(home_score < away_score, home_team, ifelse(home_score == away_score, "DRAW", away_team))) %>% #mutate "loserCountry"
+  mutate(loserGoalDifferential = ifelse(loserCountry != "DRAW", -abs(home_score-away_score), 0))  #mutatl loser country's goal differential
+
+drops <- c("date") #Choose which columns to delete
+football_results <- football_results[ , !(names(football_results) %in% drops)] #delete columns from "football_results" data frame according to "drops"
+
+```
+
+#Data Grouping
+```{r}
+group_winner_results <- football_results %>% #create data frame for winning results
+    group_by(year, winnerCountry) %>% #group data according to year and country
+    summarise(pos_goals = sum(winnerGoalDifferential))  #add goal differentials according to c("year", "country")
+group_winner_results <- group_winner_results[group_winner_results$winnerCountry!="DRAW", ] #delete all rows with a "DRAW"
+colnames(group_winner_results)[2] <- "country" #rename "winnerCountry" column to "country"
+
+group_loser_results <- football_results %>% #create data frame for losing results
+  group_by(year, loserCountry) %>%  #group data according to year and country
+  summarise(neg_goals = sum(loserGoalDifferential)) #add goal differentials according to c("year", "country")
+group_loser_results <- group_loser_results[group_loser_results$loserCountry!="DRAW", ] #delete all rows with a "DRAW"
+colnames(group_loser_results)[2] <- "country" #rename "winnerCountry" column to "country"
+
+
+group_results <- full_join(group_winner_results, group_loser_results, by = c("year","country")) #combine winning and losing data 
+group_results <- group_results %>%
+  mutate(goalDifferential = ifelse(is.na(neg_goals), pos_goals, ifelse(is.na(pos_goals), neg_goals, neg_goals + pos_goals))) #mutate final "goalDifferential"
+
+group_results <- group_results[order(group_results$year), ] #put data in order
+
+print(group_results)
+
+```
+
